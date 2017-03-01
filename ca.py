@@ -41,6 +41,7 @@ def get_input(text):
             print("Try to use numbers")
     return number
 
+"""Keep track of human states"""
 def normal_deaths_add():
     global normal_deaths
     normal_deaths += 1
@@ -60,7 +61,6 @@ def immunes_add():
 
 class Human(object):
     dead = False
-
     def __init__(self, x, y, max_age):
         self.color = 4
         self.x = x
@@ -76,7 +76,10 @@ class Human(object):
         self.immune = False
 
     def disease(self):
+        """Continues the infection by being fatal or getting immune"""
+        # Survival by e.g. medication
         if self.days_with_malaria < self.survival:
+            # Sadly dying is also an option
             if random() < self.mortality_rate:
                 self.dead = True
                 print "Dead by malaria"
@@ -92,12 +95,14 @@ class Human(object):
             immunes_add()
 
     def infect(self):
+        """Human gets the infection"""
         self.infected = True
         self.color = 5
         print "Infected"
         infects_add()
 
     def older(self):
+        """The human ages over time untill max_age"""
         self.age += 1
         if self.age > self.max_age:
             self.dead = True
@@ -122,13 +127,16 @@ class Mosquito(object):
         self.max_age = max_age
         self.infected = False
         self.hungry = True
+        # Timesteps it take sbeing hungry again
         self.hungry_in = hungry_in
+        # Keeps track of timesteps when hungry again
         self.hunger_count = self.hungry_in
         self.color = None
         self.coloring()
 
     def coloring(self):
-        # Infected is more important than hungry
+        """Creates colors for the graphical simulation"""
+        # Infected is more important than hungry (visually)
         if self.infected:
             self.color = 0
         elif self.hungry:
@@ -137,22 +145,27 @@ class Mosquito(object):
             self.color = 2
 
     def move(self):
+        """Mosquito moves in a Moore neighborhood every timestep"""
         self.x += randint(-1, 1)
         self.y += randint(-1, 1)
+        # periodic boundaries
         self.x %= glob_width
         self.y %= glob_height
 
     def infect(self):
+        """Gets infectes by a human"""
         self.infected = True
         self.coloring()
 
     def satisfied(self):
+        """No more hunger"""
         self.hungry = False
         self.hunger_count = self.hungry_in
         self.coloring()
 
 
-    def hunger(self):
+    def need_for_blood(self):
+        """Check if stomach is empty or digest blood"""
         if self.hunger_count == 0:
             self.hungry = True
             self.coloring()
@@ -162,7 +175,7 @@ class Mosquito(object):
 
     def update(self):
         self.move()
-        self.hunger()
+        self.need_for_blood()
         # self.hungry()
 
 class CASim(Model):
@@ -182,16 +195,14 @@ class CASim(Model):
         self.infection_change = 0.5
         self.hungry_in = 5
 
-        self.parameters = {'max_age':60, 'infection_change':0.5, 'mortality_rate':0.1, 'survival': 20}
+        # Using this later on
+        self.parameters = {'max_age':100, 'infection_change':0.5, 'mortality_rate':0.1, 'survival': 20}
 
         self.make_param('width', 10)
         self.make_param('height', 20)
         self.make_param('humans', 5, setter=self.setter_max)
         self.make_param('mosquitos', 5, setter=self.setter_max)
         self.make_param('infected', 1,  setter=self.setter_infected)
-
-        # glob_height = self.height
-        # glob_width = self.width
 
     def setter_infected(self, val):
         """Setter for the infected parameter, clipping its value <= mosquitos"""
@@ -214,6 +225,7 @@ class CASim(Model):
             mosquito.update()
 
         for human in self.human_arr:
+            # If a human died, create a baby in its place
             dead = human.update()
             if dead:
                 self.human_arr.remove(human)
@@ -221,16 +233,20 @@ class CASim(Model):
 
         for human in self.human_arr:
             for mosquito in self.mosquito_arr:
+                # In the same cell
                 if human.x == mosquito.x and human.y == mosquito.y:
                     if mosquito.hungry:
+                        # Human gets infected
                         if not human.infected and mosquito.infected and not human.immune:
                             if random() < self.parameters['infection_change']:
                                 human.infect()
+                        # Mosquito gets infected
                         elif human.infected and not mosquito.infected:
                             mosquito.infect()
                         mosquito.satisfied()
 
     def birth(self):
+        """Creates a new human baby on an empty cell"""
         ok = False
         x = randint(0, self.width-1)
         y = randint(0, self.height-1)
@@ -245,6 +261,7 @@ class CASim(Model):
         self.human_arr.append(Human(x, y, 80))
 
     def fill_grid(self):
+        """Fills the grid with humans and mosquitos according to parameters"""
         self.human_arr = []
         for i in range(self.humans):
             self.birth()
@@ -260,6 +277,7 @@ class CASim(Model):
             self.mosquito_arr[i].infect()
 
     def update_grid(self):
+        """After each timestep update the visual simuation"""
         self.config = [[3 for i in range(self.width)] for j in range(self.height)]
 
         for human in self.human_arr:
