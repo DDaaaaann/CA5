@@ -27,6 +27,8 @@ malaria_deaths = 0
 normal_deaths = 0
 infects = 0
 immunes = 0
+births = 0
+average_age = 0
 
 def get_input(text):
     """ Gets input from user and checks input """
@@ -42,9 +44,17 @@ def get_input(text):
     return number
 
 """Keep track of human states"""
+def births_add():
+    global births
+    births += 1
+
 def normal_deaths_add():
     global normal_deaths
     normal_deaths += 1
+
+def averag_age_add(age):
+    global average_age
+    average_age += age
 
 def infects_add():
     global infects
@@ -61,29 +71,30 @@ def immunes_add():
 
 class Human(object):
     dead = False
-    def __init__(self, x, y, max_age):
+    def __init__(self, x, y, ave_age, death_rate, sick_days):
         self.color = 4
+        self.infected = False
+        self.days_with_malaria = 0
+        self.age = 0
+        self.net = False
+        self.immune = False
+
+        # Set by args
         self.x = x
         self.y = y
-        self.max_age = max_age
-        self.infected = False
-        self.age = 0
-        self.days_with_malaria = 0
-        self.net = False
-
-        self.mortality_rate = 0.01
-        self.survival = 20
-        self.immune = False
+        self.ave_age = randint(int(ave_age*0.7), int(ave_age*1.1))
+        self.death_rate = death_rate
+        self.sick_days = sick_days
 
     def disease(self):
         """Continues the infection by being fatal or getting immune"""
-        # Survival by e.g. medication
-        if self.days_with_malaria < self.survival:
+        # sick_days by e.g. medication
+        if self.days_with_malaria < self.sick_days:
             # Sadly dying is also an option
-            if random() < self.mortality_rate:
+            if random() < self.death_rate:
                 self.dead = True
-                print "Dead by malaria"
-                print "Age: ", self.age
+                # print "Dead by malaria"
+                # print "Age: ", self.age
 
                 malaria_deaths_add()
             else:
@@ -91,23 +102,24 @@ class Human(object):
         else:
             self.immune = True
             self.infected = False
-            print "Immune"
+            # print "Immune"
             immunes_add()
 
     def infect(self):
         """Human gets the infection"""
-        self.infected = True
-        self.color = 5
-        print "Infected"
-        infects_add()
+        if not self.immune:
+            self.infected = True
+            self.color = 5
+            infects_add()
 
     def older(self):
-        """The human ages over time untill max_age"""
+        """The human ages over time untill ave_age"""
         self.age += 1
-        if self.age > self.max_age:
+        if self.age > self.ave_age:
             self.dead = True
-            print "Dead by age"
-            print "Age: ", self.age
+            # print "Dead by age"
+            # print "Age: ", self.age
+            averag_age_add(self.age)
             normal_deaths_add()
 
     def update(self):
@@ -121,10 +133,10 @@ class Mosquito(object):
     global glob_width
     global glob_height
 
-    def __init__(self, x, y, max_age, hungry_in):
+    def __init__(self, x, y, hungry_in):
         self.x = x
         self.y = y
-        self.max_age = max_age
+        # self.ave_age = ave_age
         self.infected = False
         self.hungry = True
         # Timesteps it take sbeing hungry again
@@ -191,26 +203,43 @@ class CASim(Model):
         self.mosquito_arr = []
         self.config = None
 
-        self.max_age = 70
-        self.infection_change = 0.5
-        self.hungry_in = 5
+        # self.ave_age = 70
+        # self.infection_chance = 0.5
+        # self.hungry_in = 5
 
-        # Using this later on
-        self.parameters = {'max_age':100, 'infection_change':0.5, 'mortality_rate':0.1, 'survival': 20}
+        # # Using this later on
+        self.hum_param = {}
+        self.mos_param = {}
 
-        self.make_param('width', 10)
+        self.humans = 0
+        self.mosquitos = 0
+        self.infected = 0
+
+        self.make_param('width', 20)
         self.make_param('height', 20)
-        self.make_param('humans', 5, setter=self.setter_max)
-        self.make_param('mosquitos', 5, setter=self.setter_max)
-        self.make_param('infected', 1,  setter=self.setter_infected)
+        self.make_param('nets', 0)
+        self.make_param('humans_percentage', 0.5, setter=self.setter_humans)
+        self.make_param('mosquitos_percentage', 0.125, setter=self.setter_mosquitos)
+        self.make_param('infected_percentage', 0.4, setter=self.setter_infected)
 
     def setter_infected(self, val):
         """Setter for the infected parameter, clipping its value <= mosquitos"""
-        return max(0, min(val, self.mosquitos))
+        percentage = max(0, min(val, self.mosquitos))
+        self.infected = int(round((self.mosquitos)*float(percentage)))
+        return percentage
 
-    def setter_max(self, val):
-        """Setter for the max ammount of human/mosquitos"""
-        return max(0, min(val, (self.width*self.height)))
+    def setter_mosquitos(self, val):
+        """Setter for the max ammount of mosquitos"""
+        percentage = max(0, min(val, (1)))
+        self.mosquitos = int(round((self.width*self.height)*float(percentage)))
+        return percentage
+
+    def setter_humans(self, val):
+        """Setter for the max ammount of humans"""
+        percentage = max(0, min(val, (1)))
+
+        self.humans = int(round((self.width*self.height)*float(percentage)))
+        return percentage
 
 
     def set_param(self, params):
@@ -218,6 +247,22 @@ class CASim(Model):
         for key, value in params.iteritems():
             setattr(self, key, value)
 
+    def statistics(self, statistics):
+        infected = 0
+        healhty = 0
+        immune = 0
+        for human in self.human_arr:
+            if human.infected:
+                infected += 1
+            elif human.immune:
+                immune += 1
+            else:
+                healhty += 1
+        statistics[0].append(healhty)
+        statistics[1].append(infected)
+        statistics[2].append(immune)
+
+        return statistics
 
     def update_situation(self):
         """Keeps track of all species in the grid and checks bites"""
@@ -229,48 +274,79 @@ class CASim(Model):
             dead = human.update()
             if dead:
                 self.human_arr.remove(human)
-                self.birth()
+                if human.net:
+                    # Pass the net to ne newborn
+                    self.birth(True, False)
+                else:
+                    self.birth(False, False)
 
         for human in self.human_arr:
+            # print "human"
             for mosquito in self.mosquito_arr:
                 # In the same cell
+                # print "mosquito"
                 if human.x == mosquito.x and human.y == mosquito.y:
                     if mosquito.hungry:
                         # Human gets infected
-                        if not human.infected and mosquito.infected and not human.immune:
-                            if random() < self.parameters['infection_change']:
-                                human.infect()
-                        # Mosquito gets infected
-                        elif human.infected and not mosquito.infected:
-                            mosquito.infect()
-                        mosquito.satisfied()
+                        if not human.infected and mosquito.infected and not human.net:
+                            mosquito.satisfied()
 
-    def birth(self):
+                            if random() <= self.hum_param['infection_chance_mh']:
+                                human.infect()
+                                # print "break"
+                                break
+
+                        # Mosquito gets infected
+                        elif human.infected and not mosquito.infected and not human.net:
+                                mosquito.satisfied()
+
+                                if random() <= self.mos_param['infection_chance_hm']:
+                                    # print "break"
+
+                                    mosquito.infect()
+                                    break
+                        # Mosquito had a thirst quencher
+    def birth(self, net, init):
         """Creates a new human baby on an empty cell"""
-        ok = False
+        found = False
         x = randint(0, self.width-1)
         y = randint(0, self.height-1)
         if self.human_arr != []:
-            while not ok:
-                for human in self.human_arr:
-                    if human.x != x and human.y != y:
-                        ok = True
+
+            while not found:
+                found = True
                 x = randint(0, self.width-1)
                 y = randint(0, self.height-1)
+                for human in self.human_arr:
+                    if human.x == x and human.y == y:
+                        found = False
+                        break
 
-        self.human_arr.append(Human(x, y, 80))
+        new_human = Human(x, y, self.hum_param['ave_age'], self.hum_param['death_rate'], self.hum_param['sick_days'])
+
+        if net:
+            new_human.net = True
+        if init:
+            new_human.age = randint(0, self.hum_param['ave_age'])
+
+        self.human_arr.append(new_human)
+        births_add()
 
     def fill_grid(self):
         """Fills the grid with humans and mosquitos according to parameters"""
         self.human_arr = []
-        for i in range(self.humans):
-            self.birth()
+        for i in range(self.humans - self.nets):
+            print "birth"
+            self.birth(False, True)
+
+        for i in range(self.nets):
+            self.birth(True, True)
 
         self.mosquito_arr = []
         for i in range(self.mosquitos):
             x = randint(0, self.width-1)
             y = randint(0, self.height-1)
-            mosq = Mosquito(x, y, 80, 10)
+            mosq = Mosquito(x, y, self.mos_param['hungry_in'])
             self.mosquito_arr.append(mosq)
 
         for i in range(self.infected):
@@ -296,6 +372,9 @@ class CASim(Model):
         global glob_height
         self.t = 0
         self.config = [[3 for _ in range(self.width)] for i in range(self.height)]
+        self.infected = int(round((self.mosquitos)*float(self.infected_percentage)))
+        self.humans = int(round((self.width*self.height)*float(self.humans_percentage)))
+        self.mosquitos = int(round((self.width*self.height)*float(self.mosquitos_percentage)))
         glob_height = self.height
         glob_width = self.width
         self.fill_grid()
@@ -347,19 +426,87 @@ if __name__ == '__main__':
             from pyics import GUI
             cx = GUI(sim)
             cx.start()
+
+
         elif userinput == 2:
-            sim.reset()
+            # sim.reset()
 
-            i = 0
-            while i < 10000:
-                sim.step()
-                # print i
-                i+=1
+            repetitions = 1
+            timesteps = 10000
+            interval =10
+            statistics_arr = [[] for _ in range(3)]
+            rate = []
+            sample_rate = [[] for _ in range(repetitions)]
 
+
+            final_verdict = []
+            mos_params = []
+            hum_params = []
+
+            sim.hum_param = {'ave_age':70, 'infection_chance_mh':0.2, 'death_rate':0.0014, 'sick_days': 10}
+            sim.mos_param = {'infection_chance_hm':0.2, 'hungry_in': 10}
+            print sim.mos_param['hungry_in']
+
+            # sim.infected = 5
+            # sim.set_param
+            for repeat in range(repetitions):
+                sim.reset()
+                malaria_deaths = 0
+                normal_deaths = 0
+                infects = 0
+                immunes = 0
+                births = 0
+                average_age = 0
+                rate = []
+
+                i = 0
+                while i < timesteps:
+                    sim.step()
+                    if i % interval == 0:
+                        statistics_arr = sim.statistics(statistics_arr)
+                        rate.append(infects/float(births))
+                        print "i: ",  i
+
+                    i+=1
+
+                sample_rate[repeat] = rate
+
+
+
+            # print statistics_arr
+            # plt.plot( final_verdict, label='rate')
+            print "births: ", births
+            print "infects: ", infects
+            print "normal_deaths: ", normal_deaths
+            print "malaria_deaths: ", malaria_deaths
+            print "immunes: ", immunes
+            print "infected: ", sim.infected
+            print "verdict: ", infects/float(births)
+            print "average_age: ", average_age/float(births)
+
+            #
+            # plt.plot([10*i for i in range(1000/10)], statistics_arr[0], label='healhty')
+            # plt.plot([10*i for i in range(1000/10)], statistics_arr[1], label='infected')
+            # plt.plot([10*i for i in range(1000/10)], statistics_arr[2], label='immune')
+            # plt.legend()
+            # plt.show()
+            print len(sample_rate[0])
+            for repeat in range(repetitions):
+                plt.plot([interval*i for i in range(timesteps/interval)], sample_rate[repeat], label=repeat)
+            title = "Prevalence with grid: " + str(sim.width) + "x" + str(sim.height) + " humans: " + str(sim.humans_percentage) + " mosquitos: " + str(sim.mosquitos_percentage) + " mosquitos infected: " + str(sim.infected_percentage)
+            plt.title(title)
+            plt.ylabel('Prevalence (infects/births)')
+            plt.xlabel('Timesteps (T)')
+            # plt.legend()
+            plt.show()
+
+            print "rate ", infects/float(births)
             print "normal_deaths", normal_deaths
             print "malaria_deaths", malaria_deaths
             print "infects", infects
             print "immunes", immunes
+
+
 
         elif userinput == 3:
             print "Quit"
