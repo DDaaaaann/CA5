@@ -214,18 +214,26 @@ class CASim(Model):
         self.humans = 0
         self.mosquitos = 0
         self.infected = 0
+        self.nets = 0
 
         self.make_param('width', 20)
         self.make_param('height', 20)
-        self.make_param('nets', 0)
+        self.make_param('nets_percentage', 0, setter=self.setter_nets)
         self.make_param('humans_percentage', 0.5, setter=self.setter_humans)
         self.make_param('mosquitos_percentage', 0.125, setter=self.setter_mosquitos)
         self.make_param('infected_percentage', 0.4, setter=self.setter_infected)
 
     def setter_infected(self, val):
         """Setter for the infected parameter, clipping its value <= mosquitos"""
-        percentage = max(0, min(val, self.mosquitos))
+        percentage = max(0, min(val, 1))
         self.infected = int(round((self.mosquitos)*float(percentage)))
+        return percentage
+
+    def setter_nets(self, val):
+        """Setter for the max ammount of mosquitos"""
+        percentage = max(0, min(val, (1)))
+        self.nets = int(round((self.humans)*float(percentage)))
+        print "nets: ", self.nets
         return percentage
 
     def setter_mosquitos(self, val):
@@ -375,6 +383,7 @@ class CASim(Model):
         self.infected = int(round((self.mosquitos)*float(self.infected_percentage)))
         self.humans = int(round((self.width*self.height)*float(self.humans_percentage)))
         self.mosquitos = int(round((self.width*self.height)*float(self.mosquitos_percentage)))
+        self.nets = int(round(self.humans)*float(self.nets_percentage))
         glob_height = self.height
         glob_width = self.width
         self.fill_grid()
@@ -433,7 +442,7 @@ if __name__ == '__main__':
 
             repetitions = 1
             timesteps = 10000
-            interval =10
+            interval = 10
             statistics_arr = [[] for _ in range(3)]
             rate = []
             sample_rate = [[] for _ in range(repetitions)]
@@ -445,12 +454,13 @@ if __name__ == '__main__':
 
             sim.hum_param = {'ave_age':70, 'infection_chance_mh':0.2, 'death_rate':0.0014, 'sick_days': 10}
             sim.mos_param = {'infection_chance_hm':0.2, 'hungry_in': 10}
-            print sim.mos_param['hungry_in']
+            sim.mosquitos_percentage = 0.125
+            sim.infected_percentage = 0.4
+            sim.nets_percentage = 1
 
-            # sim.infected = 5
-            # sim.set_param
             for repeat in range(repetitions):
                 sim.reset()
+                # reset counters
                 malaria_deaths = 0
                 normal_deaths = 0
                 infects = 0
@@ -484,12 +494,7 @@ if __name__ == '__main__':
             print "verdict: ", infects/float(births)
             print "average_age: ", average_age/float(births)
 
-            #
-            # plt.plot([10*i for i in range(1000/10)], statistics_arr[0], label='healhty')
-            # plt.plot([10*i for i in range(1000/10)], statistics_arr[1], label='infected')
-            # plt.plot([10*i for i in range(1000/10)], statistics_arr[2], label='immune')
-            # plt.legend()
-            # plt.show()
+
             print len(sample_rate[0])
             for repeat in range(repetitions):
                 plt.plot([interval*i for i in range(timesteps/interval)], sample_rate[repeat], label=repeat)
